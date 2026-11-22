@@ -1,0 +1,294 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  TRIALING
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum CampaignAudience {
+  ALL_USERS
+  ACTIVE_SUBSCRIBERS
+  FREE_USERS
+  PREMIUM_USERS
+}
+
+enum CampaignStatus {
+  DRAFT
+  SENT
+  SCHEDULED
+}
+
+enum MoviePublishStatus {
+  PUBLISHED
+  DRAFT
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum NotificationType {
+  NEW_MOVIE
+  PAYMENT
+  UPDATE
+  PROMO
+}
+
+model User {
+  id           Int            @id @default(autoincrement())
+  name         String         @db.VarChar(120)
+  email        String         @unique @db.VarChar(191)
+  passwordHash String         @db.VarChar(255)
+  role         Role           @default(USER)
+  avatarColor  String         @default("#e11d48") @db.VarChar(20)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  profiles     Profile[]
+  subscription Subscription?
+  watchlist     WatchlistItem[]
+  history       WatchHistory[]
+  campaigns     EmailCampaign[]
+  customMovies  CustomMovie[]
+  payments      Payment[]
+  notifications Notification[]
+}
+
+model Profile {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  name      String   @db.VarChar(60)
+  avatar    String   @default("crimson") @db.VarChar(40)
+  isKids    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model SubscriptionPlan {
+  id               Int            @id @default(autoincrement())
+  name             String         @db.VarChar(80)
+  slug             String         @unique @db.VarChar(50)
+  description      String         @db.VarChar(255)
+  priceMonthly     Decimal        @db.Decimal(10, 2)
+  priceYearly      Decimal        @db.Decimal(10, 2)
+  videoQuality     String         @db.VarChar(60)
+  resolution       String         @db.VarChar(40)
+  maxScreens       Int            @default(1)
+  downloadsEnabled Boolean        @default(false)
+  features         Json
+  isPopular        Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+
+  subscriptions Subscription[]
+  payments      Payment[]
+}
+
+model Subscription {
+  id                 Int                @id @default(autoincrement())
+  userId             Int                @unique
+  planId             Int
+  status             SubscriptionStatus @default(ACTIVE)
+  billingCycle       BillingCycle       @default(MONTHLY)
+  currentPeriodStart DateTime           @default(now())
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  user User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([planId])
+}
+
+model WatchlistItem {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  movieId     Int
+  title       String   @db.VarChar(255)
+  posterPath  String?  @db.VarChar(255)
+  backdropPath String? @db.VarChar(255)
+  voteAverage Float    @default(0)
+  releaseDate String?  @db.VarChar(30)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, movieId])
+  @@index([userId])
+}
+
+model WatchHistory {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  movieId         Int
+  title           String   @db.VarChar(255)
+  posterPath      String?  @db.VarChar(255)
+  backdropPath    String?  @db.VarChar(255)
+  progressPercent Int      @default(15)
+  watchedAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, movieId])
+  @@index([userId, watchedAt])
+}
+
+model EmailCampaign {
+  id             Int              @id @default(autoincrement())
+  subject        String           @db.VarChar(200)
+  audience       CampaignAudience @default(ALL_USERS)
+  body           String           @db.Text
+  status         CampaignStatus   @default(DRAFT)
+  recipientCount Int              @default(0)
+  openRate       Float            @default(0)
+  sentAt         DateTime?
+  createdById    Int
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([createdById])
+  @@index([status])
+}
+
+model CustomMovie {
+  id             Int                @id @default(autoincrement())
+  title          String             @db.VarChar(255)
+  tagline        String?            @db.VarChar(255)
+  overview       String             @db.Text
+  genres         String             @default("Drama") @db.VarChar(255)
+  releaseYear    Int                @default(2026)
+  runtimeMinutes Int                @default(120)
+  rating         Float              @default(8.2)
+  maturityRating String             @default("PG-13") @db.VarChar(20)
+  videoQuality   String             @default("4K HDR") @db.VarChar(30)
+  posterUrl      String?            @db.VarChar(500)
+  backdropUrl    String?            @db.VarChar(500)
+  videoUrl       String?            @db.VarChar(500)
+  isFeatured     Boolean            @default(false)
+  status         MoviePublishStatus @default(PUBLISHED)
+  views          Int                @default(0)
+  uploadedById   Int
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  uploadedBy User @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([uploadedById])
+}
+
+model Coupon {
+  id              Int          @id @default(autoincrement())
+  code            String       @unique @db.VarChar(50)
+  discountType    DiscountType @default(PERCENTAGE)
+  discountValue   Decimal      @db.Decimal(10, 2)
+  expiryDate      DateTime?
+  usageLimit      Int?
+  usedCount       Int          @default(0)
+  minOrderAmount  Decimal      @default(0) @db.Decimal(10, 2)
+  applicablePlans Json?
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model Payment {
+  id                Int           @id @default(autoincrement())
+  externalReference String        @unique @db.VarChar(120)
+  userId            Int
+  planId            Int
+  billingCycle      BillingCycle  @default(MONTHLY)
+  originalAmount    Decimal       @db.Decimal(10, 2)
+  discountAmount    Decimal       @default(0) @db.Decimal(10, 2)
+  finalAmount       Decimal       @db.Decimal(10, 2)
+  couponCode        String?       @db.VarChar(50)
+  provider          String        @default("SANDBOX") @db.VarChar(40)
+  status            PaymentStatus @default(PENDING)
+  metadata          Json?
+  completedAt       DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  user User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  type      NotificationType @default(UPDATE)
+  title     String           @db.VarChar(200)
+  message   String           @db.Text
+  link      String?          @db.VarChar(255)
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+model NewsTicker {
+  id        Int      @id @default(autoincrement())
+  text      String   @db.VarChar(500)
+  badge     String   @default("NEW") @db.VarChar(40)
+  link      String?  @db.VarChar(255)
+  isActive  Boolean  @default(true)
+  priority  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, priority])
+}
+
+model PromoPopup {
+  id                 Int      @id @default(autoincrement())
+  title              String   @db.VarChar(200)
+  message            String   @db.Text
+  imageUrl           String?  @db.VarChar(500)
+  buttonText         String   @default("Claim Offer") @db.VarChar(80)
+  buttonLink         String   @default("/pricing") @db.VarChar(255)
+  couponCode         String?  @db.VarChar(50)
+  isActive           Boolean  @default(true)
+  showOncePerSession Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([isActive])
+}
